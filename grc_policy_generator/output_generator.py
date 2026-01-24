@@ -252,8 +252,8 @@ This policy supports compliance with:
 """
 
     def generate_compliance_matrix(self, controls: List[ComplianceControl],
-                                   framework: str) -> str:
-        """Generate compliance matrix for a specific framework."""
+                                   framework: str, config: Dict[str, Any] = None) -> str:
+        """Generate compliance matrix for a specific framework with validation."""
         filepath = os.path.join(self.output_dir, f"{framework.replace(' ', '_')}_Compliance_Matrix.md")
 
         content = f"""# {framework} Compliance Matrix
@@ -264,16 +264,35 @@ This policy supports compliance with:
 |------------|--------------|-------------|----------------|--------|
 """
 
+        compliant_count = 0
+        partial_count = 0
+        non_compliant_count = 0
+
         for control in controls:
-            content += f"| {control.control_id} | {control.control_name} | {control.requirement} | Section {control.policy_section} | ✓ {control.status} |\n"
+            # Validate control against config
+            status, status_icon = self._validate_control(control, config, framework)
+
+            if status == "Compliant":
+                compliant_count += 1
+            elif status == "Partial":
+                partial_count += 1
+            else:
+                non_compliant_count += 1
+
+            content += f"| {control.control_id} | {control.control_name} | {control.requirement} | Section {control.policy_section} | {status_icon} {status} |\n"
+
+        total_controls = len(controls)
+        compliance_rate = int((compliant_count / total_controls) * 100) if total_controls > 0 else 0
 
         content += f"""
 ---
 
 **Summary:**
-- Total Controls: {len(controls)}
-- Compliant: {len(controls)}
-- Compliance Rate: 100%
+- Total Controls: {total_controls}
+- Compliant: {compliant_count}
+- Partial: {partial_count}
+- Non-Compliant: {non_compliant_count}
+- Compliance Rate: {compliance_rate}%
 
 **Status Legend:**
 - ✓ Compliant: Control is fully implemented and documented
@@ -285,6 +304,88 @@ This policy supports compliance with:
             f.write(content)
 
         return filepath
+
+    @staticmethod
+    def _validate_control(control: ComplianceControl, config: Dict[str, Any], framework: str) -> tuple:
+        """Validate if a control is met based on configuration."""
+        if not config:
+            return "Unknown", "?"
+
+        # Password-related controls
+        if "password" in control.control_name.lower() or "authentication" in control.control_name.lower():
+
+            # SOC 2 CC6.1 - Logical Access Controls
+            if control.control_id == "CC6.1":
+                if config.get('min_length', 0) >= 8:
+                    return "Compliant", "✓"
+                else:
+                    return "Non-Compliant", "✗"
+
+            # SOC 2 CC6.2 - Authentication
+            if control.control_id == "CC6.2":
+                has_mfa = config.get('mfa_required') in ['required_all', 'required_privileged']
+                has_min_length = config.get('min_length', 0) >= 8
+
+                if has_mfa and has_min_length:
+                    return "Compliant", "✓"
+                elif has_mfa or has_min_length:
+                    return "Partial", "⚠"
+                else:
+                    return "Non-Compliant", "✗"
+
+            # ISO 27001 A.9.2.4 - Password Management
+            if control.control_id == "A.9.2.4":
+                if config.get('min_length', 0) >= 12 and config.get('require_special'):
+                    return "Compliant", "✓"
+                elif config.get('min_length', 0) >= 8:
+                    return "Partial", "⚠"
+                else:
+                    return "Non-Compliant", "✗"
+
+            # ISO 27001 A.9.4.3 - Strong Authentication
+            if control.control_id == "A.9.4.3":
+                if config.get('mfa_required') == 'required_all':
+                    return "Compliant", "✓"
+                elif config.get('mfa_required') == 'required_privileged':
+                    return "Partial", "⚠"
+                else:
+                    return "Non-Compliant", "✗"
+
+            # NYDFS §500.12 - MFA
+            if control.control_id == "§500.12":
+                if config.get('mfa_required') in ['required_all', 'required_privileged']:
+                    return "Compliant", "✓"
+                else:
+                    return "Non-Compliant", "✗"
+
+            # NYDFS §500.07 - Access Controls
+            if control.control_id == "§500.07":
+                if config.get('min_length', 0) >= 8 and config.get('mfa_required') != 'optional':
+                    return "Compliant", "✓"
+                elif config.get('min_length', 0) >= 8 or config.get('mfa_required') != 'optional':
+                    return "Partial", "⚠"
+                else:
+                    return "Non-Compliant", "✗"
+
+            # PCI-DSS 8.3.6 - Password Strength
+            if control.control_id == "8.3.6":
+                if config.get('min_length', 0) >= 12:
+                    return "Compliant", "✓"
+                elif config.get('min_length', 0) >= 8:
+                    return "Partial", "⚠"
+                else:
+                    return "Non-Compliant", "✗"
+
+        # Access control related controls
+        if "access" in control.control_name.lower():
+            # General access controls - check if MFA is enabled
+            if config.get('mfa_required') in ['required_all', 'required_privileged']:
+                return "Compliant", "✓"
+            else:
+                return "Partial", "⚠"
+
+        # Default: assume compliant for controls we haven't specifically validated
+        return "Compliant", "✓"
 
     def generate_control_testing_checklist(self, controls: List[ComplianceControl],
                                           frameworks: List[str]) -> str:

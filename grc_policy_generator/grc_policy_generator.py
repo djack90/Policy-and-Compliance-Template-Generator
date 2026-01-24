@@ -396,7 +396,7 @@ def generate_artifacts(policy_type: str, config: Dict[str, Any], current_state: 
         print(f"[{i}/9] {framework} compliance matrix...                       ", end='', flush=True)
         framework_controls = [c for c in controls if c.framework == framework]
         if framework_controls:
-            matrix_file = generator.generate_compliance_matrix(framework_controls, framework)
+            matrix_file = generator.generate_compliance_matrix(framework_controls, framework, config)
             artifacts.append((f"{framework} Matrix", os.path.basename(matrix_file)))
         print(f"{Colors.GREEN}✓{Colors.ENDC}")
 
