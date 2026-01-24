@@ -185,8 +185,7 @@ All artifacts are generated in `generated_policies/YYYY-MM-DD_HHMMSS/`:
 
 ## Technical Details
 
-- **Language:** Pure Python 3.7+
-- **Dependencies:** None (standard library only)
+- **Language:** Python 3.7+
 - **Architecture:** Modular design
   - `compliance_engine.py` - Framework mappings & risk scoring
   - `gap_analyzer.py` - Gap analysis logic
@@ -217,17 +216,6 @@ All artifacts are generated in `generated_policies/YYYY-MM-DD_HHMMSS/`:
 
 See [FUTURE_ENHANCEMENTS.md](FUTURE_ENHANCEMENTS.md) for planned improvements.
 
----
-
-## License
-
-MIT License - See LICENSE file for details
-
----
-
-## Author
-
-Built to demonstrate GRC automation capabilities for security governance and compliance roles.
 
 ---
 
