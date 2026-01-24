@@ -123,8 +123,6 @@ def select_frameworks(industry: str) -> List[str]:
 def assess_current_state(industry: str) -> Dict[str, Any]:
     """Assess current security posture."""
     print_section("CURRENT STATE ASSESSMENT")
-    print("Before generating your new policy, let's assess your current state")
-    print("to identify gaps and prioritize improvements.\n")
 
     current_state = {'industry': industry}
 
@@ -203,7 +201,6 @@ def assess_current_state(industry: str) -> Dict[str, Any]:
 def configure_target_policy(industry: str, frameworks: List[str]) -> Dict[str, Any]:
     """Configure target policy with intelligent recommendations."""
     print_section("TARGET POLICY CONFIGURATION")
-    print("Now let's configure your target policy requirements...\n")
 
     preset = INDUSTRY_PRESETS.get(industry)
     config = {}
@@ -359,7 +356,7 @@ def display_risk_assessment(config: Dict[str, Any], industry: str):
 def generate_artifacts(policy_type: str, config: Dict[str, Any], current_state: Dict[str, Any],
                       frameworks: List[str], risk_result: Dict[str, Any]) -> str:
     """Generate all compliance artifacts."""
-    print("\nGenerating policy artifacts...\n")
+    print("\nGenerating artifacts...\n")
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
@@ -376,63 +373,70 @@ def generate_artifacts(policy_type: str, config: Dict[str, Any], current_state: 
 
     artifacts = []
 
-    # 1. Policy document
-    print(f"[1/7] Generating policy document...                    ", end='', flush=True)
-    policy_file = generator.generate_policy_document(policy_type, config, metadata)
-    artifacts.append(("Policy Document (Markdown)", os.path.basename(policy_file)))
-    print(f"{Colors.GREEN}✓ Done{Colors.ENDC}")
-
-    # 2-4. Compliance matrices
-    controls = get_framework_controls(policy_type, frameworks)
-    for i, framework in enumerate(frameworks, start=2):
-        print(f"[{i}/7] Creating {framework} compliance matrix...              ", end='', flush=True)
-        framework_controls = [c for c in controls if c.framework == framework]
-        if framework_controls:
-            matrix_file = generator.generate_compliance_matrix(framework_controls, framework)
-            artifacts.append((f"{framework} Compliance Matrix", os.path.basename(matrix_file)))
-        print(f"{Colors.GREEN}✓ Done{Colors.ENDC}")
-
-    # 5. Control testing checklist
-    print(f"[5/7] Generating control testing procedures...         ", end='', flush=True)
-    checklist_file = generator.generate_control_testing_checklist(controls, frameworks)
-    artifacts.append(("Control Testing Checklist", os.path.basename(checklist_file)))
-    print(f"{Colors.GREEN}✓ Done{Colors.ENDC}")
-
-    # 6. Gap analysis
-    print(f"[6/7] Creating gap analysis report...                  ", end='', flush=True)
+    # Gap analysis (needed for insights)
     analyzer = GapAnalyzer(current_state, config, frameworks)
     gaps = analyzer.analyze()
     gap_summary = analyzer.get_summary()
+
+    # 1. Executive Insights (FIRST - most important for GRC Director)
+    print(f"[1/9] Executive insights summary...                    ", end='', flush=True)
+    insights_file = generator.generate_executive_insights(policy_type, risk_result, gaps, gap_summary, config, frameworks)
+    artifacts.append(("⭐ Executive Insights", os.path.basename(insights_file)))
+    print(f"{Colors.GREEN}✓{Colors.ENDC}")
+
+    # 2. Policy document
+    print(f"[2/9] Policy document...                               ", end='', flush=True)
+    policy_file = generator.generate_policy_document(policy_type, config, metadata)
+    artifacts.append(("Policy Document", os.path.basename(policy_file)))
+    print(f"{Colors.GREEN}✓{Colors.ENDC}")
+
+    # 3-5. Compliance matrices
+    controls = get_framework_controls(policy_type, frameworks)
+    for i, framework in enumerate(frameworks, start=3):
+        print(f"[{i}/9] {framework} compliance matrix...                       ", end='', flush=True)
+        framework_controls = [c for c in controls if c.framework == framework]
+        if framework_controls:
+            matrix_file = generator.generate_compliance_matrix(framework_controls, framework)
+            artifacts.append((f"{framework} Matrix", os.path.basename(matrix_file)))
+        print(f"{Colors.GREEN}✓{Colors.ENDC}")
+
+    # 6. Control testing checklist
+    print(f"[6/9] Control testing checklist...                     ", end='', flush=True)
+    checklist_file = generator.generate_control_testing_checklist(controls, frameworks)
+    artifacts.append(("Testing Checklist", os.path.basename(checklist_file)))
+    print(f"{Colors.GREEN}✓{Colors.ENDC}")
+
+    # 7. Gap analysis
+    print(f"[7/9] Gap analysis report...                           ", end='', flush=True)
     gap_file = generator.generate_gap_analysis_report(gaps, gap_summary)
-    artifacts.append(("Gap Analysis Report", os.path.basename(gap_file)))
-    print(f"{Colors.GREEN}✓ Done{Colors.ENDC}")
+    artifacts.append(("Gap Analysis", os.path.basename(gap_file)))
+    print(f"{Colors.GREEN}✓{Colors.ENDC}")
 
-    # 7. ServiceNow export
-    print(f"[7/7] Generating ServiceNow import file...             ", end='', flush=True)
+    # 8. ServiceNow export
+    print(f"[8/9] ServiceNow import file...                        ", end='', flush=True)
     sn_file = generator.generate_servicenow_export(policy_type, controls, metadata)
-    artifacts.append(("ServiceNow Import (JSON)", os.path.basename(sn_file)))
-    print(f"{Colors.GREEN}✓ Done{Colors.ENDC}")
+    artifacts.append(("ServiceNow Import", os.path.basename(sn_file)))
+    print(f"{Colors.GREEN}✓{Colors.ENDC}")
 
-    # 8. Jira export
+    # 9. Jira export
+    print(f"[9/9] Jira import file...                              ", end='', flush=True)
     jira_file = generator.generate_jira_export(gaps)
-    artifacts.append(("Jira Import (CSV)", os.path.basename(jira_file)))
-
-    # 9. Executive summary
-    exec_file = generator.generate_executive_summary(policy_type, risk_result, gap_summary, metadata)
-    artifacts.append(("Executive Summary", os.path.basename(exec_file)))
+    artifacts.append(("Jira Import", os.path.basename(jira_file)))
+    print(f"{Colors.GREEN}✓{Colors.ENDC}")
 
     return output_dir, artifacts, gaps, gap_summary
 
 
 def display_output_summary(output_dir: str, artifacts: List[tuple], gaps: List, gap_summary: Dict):
     """Display generation summary."""
-    print_section("GENERATION COMPLETE")
+    print_section("COMPLETE")
 
-    print(f"📁 Output Directory: {Colors.CYAN}{output_dir}{Colors.ENDC}\n")
+    print(f"📁 {Colors.CYAN}{output_dir}{Colors.ENDC}\n")
 
-    print("Generated Artifacts:")
+    print("Artifacts:")
     for name, filename in artifacts:
-        print(f"├── 📄 {filename}")
+        icon = "⭐" if "Insights" in name else "├──"
+        print(f"{icon} {filename}")
 
     print_section("GAP ANALYSIS SUMMARY")
 
@@ -478,41 +482,22 @@ def display_output_summary(output_dir: str, artifacts: List[tuple], gaps: List, 
             print(f"    Cost Estimate: {gap.cost_estimate}")
             print()
 
-    # Next steps menu
-    print_section("NEXT STEPS")
-    print("Would you like to:")
-    print(f"[1] View detailed gap analysis")
-    print(f"[2] Generate Jira tickets for gaps")
-    print(f"[3] View audit readiness report")
-    print(f"[4] Exit")
+    # Insights summary
+    insights_file = os.path.join(output_dir, "EXECUTIVE_INSIGHTS.md")
+    if os.path.exists(insights_file):
+        print(f"\n{Colors.CYAN}{'━' * 64}{Colors.ENDC}")
+        print(f"\n{Colors.BOLD}⭐ EXECUTIVE INSIGHTS:{Colors.ENDC}\n")
+        with open(insights_file, 'r') as f:
+            # Show first 30 lines of insights
+            lines = f.readlines()
+            for line in lines[:30]:
+                print(line.rstrip())
+            if len(lines) > 30:
+                print(f"\n{Colors.CYAN}... (see {insights_file} for full report){Colors.ENDC}")
 
-    choice = input(f"\n{Colors.BOLD}Choice [1-4]:{Colors.ENDC} ").strip()
-
-    if choice == "1":
-        gap_file = os.path.join(output_dir, "Gap_Analysis_Report.md")
-        if os.path.exists(gap_file):
-            print(f"\n{Colors.CYAN}Gap Analysis Report:{Colors.ENDC}\n")
-            with open(gap_file, 'r') as f:
-                print(f.read())
-    elif choice == "2":
-        jira_file = os.path.join(output_dir, "Jira_Import_Gaps.csv")
-        print(f"\n{Colors.GREEN}✓ Jira import file created: {jira_file}{Colors.ENDC}")
-        print(f"  → Import this file into Jira project 'INFOSEC'")
-        if gap_summary['total_gaps'] > 0:
-            print(f"  → {gap_summary['total_gaps']} ticket(s) will be created")
-            print(f"  → Priorities: {gap_summary['critical']} Critical, {gap_summary['high']} High, {gap_summary['medium']} Medium, {gap_summary['low']} Low")
-
-    print_section("SUMMARY")
-    print(f"\n{Colors.GREEN}✨ Policy generation complete!{Colors.ENDC}")
-    print(f"   Open {Colors.CYAN}{output_dir}{Colors.ENDC} to review artifacts.\n")
-    print(f"{Colors.BOLD}Next steps:{Colors.ENDC}")
-    print(f"1. Review generated policy with CISO")
-    print(f"2. Import control testing checklist to audit workbook")
-    print(f"3. Import ServiceNow_Import.json to GRC platform")
-    print(f"4. Create Jira tickets from Jira_Import_Gaps.csv")
-    print(f"5. Schedule policy review meeting\n")
-
-    print(f"Run '{Colors.CYAN}python grc_policy_generator.py --help{Colors.ENDC}' for more options.\n")
+    print(f"\n{Colors.CYAN}{'━' * 64}{Colors.ENDC}")
+    print(f"\n{Colors.GREEN}✓ Complete{Colors.ENDC}")
+    print(f"\nArtifacts: {Colors.CYAN}{output_dir}{Colors.ENDC}\n")
 
 
 def main():

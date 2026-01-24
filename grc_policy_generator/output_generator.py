@@ -549,6 +549,199 @@ This policy aligns with industry best practices and regulatory requirements, pos
 
         return filepath
 
+    def generate_executive_insights(self, policy_type: str, risk_result: Dict[str, Any],
+                                   gaps: List[Gap], gap_summary: Dict[str, Any],
+                                   config: Dict[str, Any], frameworks: List[str]) -> str:
+        """Generate executive insights summary - concise dashboard view."""
+        filepath = os.path.join(self.output_dir, "EXECUTIVE_INSIGHTS.md")
+
+        # Determine overall status
+        if risk_result['score'] <= 3.0:
+            status = "🟢 STRONG"
+            status_desc = "Security posture exceeds industry standards"
+        elif risk_result['score'] <= 5.0:
+            status = "🟡 ADEQUATE"
+            status_desc = "Security posture meets minimum requirements with room for improvement"
+        elif risk_result['score'] <= 7.0:
+            status = "🟠 NEEDS IMPROVEMENT"
+            status_desc = "Security posture has significant gaps requiring attention"
+        else:
+            status = "🔴 AT RISK"
+            status_desc = "Security posture presents substantial risk to the organization"
+
+        # Categorize gaps by priority
+        critical_gaps = [g for g in gaps if g.risk_level == "CRITICAL"]
+        high_gaps = [g for g in gaps if g.risk_level == "HIGH"]
+        medium_gaps = [g for g in gaps if g.risk_level == "MEDIUM"]
+        low_gaps = [g for g in gaps if g.risk_level == "LOW"]
+
+        # Quick wins (low effort, high/medium impact)
+        quick_wins = [g for g in gaps if g.effort in ["Low"] and g.risk_level in ["HIGH", "MEDIUM"]]
+
+        # Calculate costs
+        total_cost_low = sum(self._extract_cost_low(g.cost_estimate) for g in gaps)
+        total_cost_high = sum(self._extract_cost_high(g.cost_estimate) for g in gaps)
+
+        # Timeline
+        max_timeline = max([g.timeline_days for g in gaps], default=0)
+
+        content = f"""# GRC Executive Insights Summary
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+**Policy:** {policy_type.title()} Policy
+**Frameworks:** {', '.join(frameworks)}
+
+---
+
+## Overall Security Posture: {status}
+
+{status_desc}
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| **Risk Score** | {risk_result['score']}/10 | {risk_result['risk_level']} |
+| **Compliance Coverage** | {risk_result['compliance_pct']}% | {"✓ Excellent" if risk_result['compliance_pct'] >= 95 else "⚠ Needs Work"} |
+| **Total Gaps** | {gap_summary['total_gaps']} | {gap_summary['critical']} Critical, {gap_summary['high']} High, {gap_summary['medium']} Medium, {gap_summary['low']} Low |
+
+---
+
+## What's Working Well ✓
+
+"""
+
+        # Show strengths based on config
+        strengths = []
+        if config.get('min_length', 0) >= 12:
+            strengths.append(f"- **Strong password length** ({config['min_length']} chars) exceeds industry minimum")
+        if config.get('require_special'):
+            strengths.append("- **Password complexity** enforced with special character requirements")
+        if config.get('mfa_required') == 'required_all':
+            strengths.append("- **Universal MFA** provides strong authentication across all users")
+        elif config.get('mfa_required') == 'required_privileged':
+            strengths.append("- **Privileged MFA** protects administrative accounts")
+
+        if strengths:
+            content += "\n".join(strengths) + "\n"
+        else:
+            content += "- No significant strengths identified in current configuration\n"
+
+        content += "\n---\n\n"
+
+        # Critical issues
+        if critical_gaps or high_gaps:
+            content += "## 🚨 Critical Issues (Immediate Action Required)\n\n"
+            for gap in critical_gaps + high_gaps:
+                content += f"### {gap.title}\n"
+                content += f"- **Risk:** {gap.risk_level}\n"
+                content += f"- **Impact:** {gap.description}\n"
+                content += f"- **Action:** {gap.remediation[:150]}{'...' if len(gap.remediation) > 150 else ''}\n"
+                content += f"- **Timeline:** {gap.timeline_days} days\n"
+                content += f"- **Cost:** {gap.cost_estimate}\n\n"
+            content += "---\n\n"
+
+        # Quick wins
+        if quick_wins:
+            content += "## ⚡ Quick Wins (High Value, Low Effort)\n\n"
+            for gap in quick_wins:
+                content += f"- **{gap.title}** - {gap.timeline_days} days, {gap.cost_estimate}\n"
+            content += "\n---\n\n"
+
+        # Compliance status
+        content += "## 📊 Compliance Status by Framework\n\n"
+        content += "| Framework | Status | Notes |\n"
+        content += "|-----------|--------|-------|\n"
+
+        for framework in frameworks:
+            if framework == "SOC 2":
+                status_icon = "✓" if config.get('mfa_required') in ['required_all', 'required_privileged'] else "⚠"
+                notes = "MFA and access controls implemented" if status_icon == "✓" else "MFA gaps present"
+            elif framework == "ISO 27001":
+                status_icon = "✓" if config.get('min_length', 0) >= 12 else "⚠"
+                notes = "Password controls meet A.9.2.4" if status_icon == "✓" else "Password length below recommendation"
+            elif framework == "NYDFS":
+                status_icon = "✓" if config.get('mfa_required') == 'required_all' else "⚠"
+                notes = "§500.12 MFA compliant" if status_icon == "✓" else "MFA requirements not fully met"
+            else:
+                status_icon = "✓"
+                notes = "Requirements met"
+
+            content += f"| {framework} | {status_icon} | {notes} |\n"
+
+        content += "\n---\n\n"
+
+        # Action plan
+        content += "## 🎯 Recommended Action Plan (Prioritized)\n\n"
+
+        priority_order = critical_gaps + high_gaps + medium_gaps + low_gaps
+
+        if priority_order:
+            for i, gap in enumerate(priority_order[:5], 1):  # Top 5 priorities
+                content += f"**{i}. {gap.title}** ({gap.risk_level})\n"
+                content += f"   - Timeline: {gap.timeline_days} days\n"
+                content += f"   - Effort: {gap.effort}\n"
+                content += f"   - Cost: {gap.cost_estimate}\n\n"
+        else:
+            content += "✓ No gaps identified - policy meets all requirements\n\n"
+
+        content += "---\n\n"
+
+        # Resource summary
+        content += "## 💰 Resource Requirements\n\n"
+        if total_cost_low > 0:
+            content += f"- **Estimated Investment:** ${total_cost_low:,} - ${total_cost_high:,}\n"
+            content += f"- **Implementation Timeline:** {max_timeline} days\n"
+            content += f"- **Total Gaps to Address:** {gap_summary['total_gaps']}\n"
+        else:
+            content += "- **No remediation costs** - policy is compliant\n"
+
+        content += "\n---\n\n"
+
+        # Bottom line
+        content += "## Bottom Line\n\n"
+
+        if gap_summary['critical'] + gap_summary['high'] > 0:
+            content += f"**Action Required:** Address {gap_summary['critical'] + gap_summary['high']} critical/high priority gap(s) within {min([g.timeline_days for g in critical_gaps + high_gaps], default=30)} days to mitigate compliance and security risks.\n"
+        elif gap_summary['medium'] > 0:
+            content += f"**Monitoring Required:** Address {gap_summary['medium']} medium priority gap(s) to optimize security posture.\n"
+        else:
+            content += "**Compliant:** Policy meets all framework requirements. Continue monitoring and annual review.\n"
+
+        # Determine audit confidence
+        if risk_result['score'] <= 4.0:
+            audit_confidence = "High"
+        elif risk_result['score'] <= 6.0:
+            audit_confidence = "Medium"
+        else:
+            audit_confidence = "Low"
+
+        content += f"\n**Risk Level:** {risk_result['risk_level']}\n"
+        content += f"**Audit Confidence:** {audit_confidence}\n"
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return filepath
+
+    @staticmethod
+    def _extract_cost_low(cost_str: str) -> int:
+        """Extract low end of cost estimate."""
+        import re
+        match = re.search(r'\$([0-9,]+)', cost_str)
+        if match:
+            return int(match.group(1).replace(',', ''))
+        return 0
+
+    @staticmethod
+    def _extract_cost_high(cost_str: str) -> int:
+        """Extract high end of cost estimate."""
+        import re
+        matches = re.findall(r'\$([0-9,]+)', cost_str)
+        if len(matches) >= 2:
+            return int(matches[1].replace(',', ''))
+        elif len(matches) == 1:
+            return int(matches[0].replace(',', ''))
+        return 0
+
     @staticmethod
     def _map_risk_to_priority(risk_level: str) -> str:
         """Map risk level to Jira priority."""
