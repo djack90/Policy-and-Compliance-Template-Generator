@@ -68,7 +68,7 @@ def select_industry() -> str:
 
     print("[?] What industry are you in?")
     print(f"    1. Financial Services - Traditional Banking")
-    print(f"    2. {Colors.BOLD}Financial Services - Crypto/Digital Assets ⭐ (Recommended for Fireblocks){Colors.ENDC}")
+    print(f"    2. Financial Services - Crypto/Digital Assets")
     print(f"    3. Healthcare")
     print(f"    4. Technology/SaaS")
     print(f"    5. Other")
